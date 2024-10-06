@@ -1,0 +1,62 @@
+# Default config file for the n-scale potential model
+temperature: 1.0 # must be 1.0 for now, because the analytical formula only works for this case
+dt: 0.001
+dim: 1 # state dimension
+
+data:
+  seed: 0 # random seed
+  init_scale: 2.0 # scale of the initial condition
+  t0: 0.0
+  t1: 2.0
+  eps: 0.1 # the epsilon parameter in the two-scale potential
+  dt_rtol: 1.0e-2 # Brownian motion time step relative tolerance
+  max_steps: 1000000 # maximum number of steps in SDE simulation
+  num_runs: 512 # number of training trajectories
+  method: "milstein" # method for SDE simulation, defaults to euler
+
+model:
+  seed: 0
+  potential:
+    alpha: 0.01 # regularization strength
+    units: # layer sizes
+      - 64
+      - 32
+    activation: "recu"
+  dissipation:
+    alpha: 0.1
+    units:
+      - 128
+      - 32
+    activation: "recu"
+    is_bounded: false # whether to have the output bounded (via tanh activation)
+  conservation:
+    units:
+      - 32
+      - 16
+    activation: "recu"
+    is_bounded: false
+
+train:
+  num_epochs: 200
+  batch_size: 2 # each batch will be [batch_size, train_traj_len, dim], so use a small batch size if train_traj_len is large
+  train_traj_len: null # can shrink the length of the training trajectories for better GPU performance
+  checkpoint_every: 20 # number of epochs to check-point the model
+  opt: # optimiser options
+    learning_rate: 1e-4
+  rop: # reduce on plateau options
+    patience: 10
+    cooldown: 10
+    factor: 0.4
+    rtol: 1e-4
+    min_scale: 1e-4
+    accumulation_size: 200
+
+hydra:
+  run:
+    dir: ./outputs/${now:%Y_%m_%d-%H_%M_%S}
+  sweep:
+    dir: ./outputs/multirun/${now:%Y_%m_%d-%H_%M_%S}
+    subdir: ${hydra.job.num}
+
+defaults:
+  - override hydra/launcher: joblib # use joblib for parallel multirun, remove if unwanted

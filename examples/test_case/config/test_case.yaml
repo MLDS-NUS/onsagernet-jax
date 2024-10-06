@@ -1,0 +1,56 @@
+# Default config file for the 2D test case
+
+temperature: 0.5
+dt: 0.001
+dim: 2 # state dimension
+
+data:
+  seed: 123 # random seed
+  init_scale: 2.0 # scale of the initial condition
+  t0: 0.0
+  t1: 2.0
+  num_runs: 512 # number of training trajectories
+
+model:
+  seed: 0
+  potential:
+    alpha: 0.1 # regularization strength
+    units: # layer sizes
+      - 128
+      - 128
+    activation: "recu"
+  dissipation:
+    alpha: 0.1
+    units:
+      - 32
+      - 16
+    activation: "recu"
+    is_bounded: false # whether to have the output bounded (via tanh activation)
+  conservation:
+    units:
+      - 32
+      - 16
+    activation: "recu"
+    is_bounded: false
+
+train:
+  num_epochs: 50
+  batch_size: 2 # each batch will be [batch_size, train_traj_len, dim], so use a small batch size if train_traj_len is large
+  train_traj_len: null # can shrink the length of the training trajectories for better GPU performance
+  checkpoint_every: 20 # number of epochs to check-point the model
+  opt: # optimiser options
+    learning_rate: 1e-3
+  rop: # reduce on plateau options
+    patience: 20
+    cooldown: 20
+    factor: 0.4
+    rtol: 1e-4
+    min_scale: 1e-4
+    accumulation_size: 2000
+
+hydra:
+  run:
+    dir: ./outputs/${now:%Y_%m_%d-%H_%M_%S}
+  sweep:
+    dir: ./outputs/multirun/${now:%Y_%m_%d-%H_%M_%S}
+    subdir: ${hydra.job.num}
