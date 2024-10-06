@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "onsagernet"
-version = "0.1.0"
+version = "0.1.3"
 description = ""
 authors = ["Qianxiao Li"]
 
@@ -30,10 +30,9 @@ exclude = [
 ]
 
 [tool.poetry.dependencies]
-python = "3.12"
+python = "^3.12"
 pdoc = "^14.7.0"
-ml-dtypes = "0.4.0"
-jax = "^0.4.31"
+equinox = "^0.11.5"
 optax = "^0.2.3"
 tqdm = "^4.66.5"
 datasets = "^3.0.0"
