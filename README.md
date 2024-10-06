@@ -7,18 +7,36 @@ with [`equinox`](https://docs.kidger.site/equinox/).
 
 ## Installation and setup
 
-*Currently this is for development. Package builds to be done in the future.*
+### Install from PyPi
 
+Install the CPU version by
+```shell
+pip install onsagernet
+```
 
-1. Install Poetry by following the instructions on this link: [Poetry](https://python-poetry.org/docs/#installation) 
+For the GPU version, first install the GPU version of jax
+```shell
+pip install "jax[cuda12]"
+```
+and then the package
+```shell
+pip install onsagernet
+```
+
+### Install from repository
+
+If you want to run the examples in this repository, first clone the repository and then proceed as follows.
+
+1. Install Poetry by following the instructions on this [link](https://python-poetry.org/docs/#installation)
 2. Set up env and install dependencies + package
 ```shell
+cd <your_cloned_repository_directory>
 make env
 ```
 
 ---
 
-### Selective installs
+#### Selective installs
 
 By default `make env` installs all dependencies.
 You can selectively install dependencies, in which case instead of `make env`, run one of the following:
@@ -37,28 +55,14 @@ poetry install --only main,examples
 
 ---
 
-### Package management for development
-
-Add a package
-```shell
-poetry add <package-name>
-```
-
-Remove a package
-```shell
-poetry remove <package-name>
-```
-
----
-
-## Using GPUs
+#### Using GPUs
 
 The current `pyproject.toml` performs a CPU install.
 If you have a CUDA-enabled GPU you can install the GPU version of `jax`
 ```shell
 make env
 poetry remove jax
-poetry add 'jax["cuda12"]'
+poetry add "jax[cuda12]"
 ```
 
 ---
