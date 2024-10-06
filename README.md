@@ -73,8 +73,7 @@ Generate API docs (see [pdoc](https://pdoc3.github.io/pdoc/) for details)
 ```shell
 make docs
 ```
-View documentation at [`./docs/index.html`](./docs/) or directly [here](https://liqianxiao.github.io/Research-OnsagerNetJax/onsagernet.html)
-for the current tracked version.
+View documentation at [`./docs/index.html`](./docs/) or directly [here](https://mlds-nus.github.io/onsagernet-jax/onsagernet.html) for the current tracked version.
 
 ---
 
