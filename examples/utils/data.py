@@ -40,7 +40,7 @@ def shrink_trajectory_len(dataset: Dataset, new_traj_len: int) -> Dataset:
         for col, dlist in zip(["t", "x", "args"], [ts, xs, argss]):
             arr = example[col]
             new_shape = (new_traj_len, arr.shape[-1])
-            arr_reshaped = arr[:max_time_idx, :].reshape(-1, *new_shape)
+            arr_reshaped = arr[:, :max_time_idx, :].reshape(1, *new_shape)
             dlist.append(arr_reshaped)
 
     ts = jnp.concatenate(ts)
