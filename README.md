@@ -43,13 +43,15 @@ You can selectively install dependencies, in which case instead of `make env`, r
 
 Only the main package dependencies
 ```shell
-poetry shell
+poetry shell (Poetry version<2.0)
+poetry env activate (Poetry version>=2.0)
 poetry install --only main
 ```
 
 Only the main package and those for examples, but not development packages
 ```shell
-poetry shell
+poetry shell (Poetry version<2.0)
+poetry env activate (Poetry version>=2.0)
 poetry install --only main,examples
 ```
 
