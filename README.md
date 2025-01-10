@@ -53,12 +53,13 @@ poetry shell
 poetry install --only main,examples
 ```
 
-Note: If using Poetry version>=2.0, use
+Note: If using `poetry` version>=2.0, use
 ```shell
 poetry env activate
 poetry install
 ```
-and replace poetry shell with poetry env activate in the makefile.
+and replace `poetry shell` with `poetry env activate` in the makefile.
+
 ---
 
 #### Using GPUs
