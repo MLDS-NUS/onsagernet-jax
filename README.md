@@ -27,7 +27,7 @@ pip install onsagernet
 
 If you want to run the examples in this repository, first clone the repository and then proceed as follows.
 
-1. Install Poetry by following the instructions on this [link](https://python-poetry.org/docs/#installation)
+1. Install Poetry by following the instructions on this [link](https://python-poetry.org/docs/#installation). Note: The following installation steps are compatible with Poetry version<2.0. If you are using Poetry version>=2.0, refer to the Poetry documentation for updated commands.
 2. Set up env and install dependencies + package
 ```shell
 cd <your_cloned_repository_directory>
@@ -43,18 +43,22 @@ You can selectively install dependencies, in which case instead of `make env`, r
 
 Only the main package dependencies
 ```shell
-poetry shell (Poetry version<2.0)
-poetry env activate (Poetry version>=2.0)
+poetry shell
 poetry install --only main
 ```
 
 Only the main package and those for examples, but not development packages
 ```shell
-poetry shell (Poetry version<2.0)
-poetry env activate (Poetry version>=2.0)
+poetry shell
 poetry install --only main,examples
 ```
 
+Note: If using Poetry version>=2.0, use
+```shell
+poetry env activate
+poetry install
+```
+and replace poetry shell with poetry env activate in the makefile.
 ---
 
 #### Using GPUs
