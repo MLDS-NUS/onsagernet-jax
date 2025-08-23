@@ -6,8 +6,6 @@
 [![Docs](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://mlds-nus.github.io/onsagernet-jax)  
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Lint: ruff](https://img.shields.io/badge/lint-ruff-46a2f1?logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
-[![Types: mypy](https://img.shields.io/badge/typechecked-mypy-1f5082.svg)](http://mypy-lang.org/)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 
 This is an implementation of the *onsagernet* library in [`jax`](https://jax.readthedocs.io/en/latest/)
 with [`equinox`](https://docs.kidger.site/equinox/).
