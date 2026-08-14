@@ -18,7 +18,7 @@ import jax.numpy as jnp
 import equinox as eqx
 
 from ._activations import get_activation
-from ._layers import ConstantLayer
+from ._layers import ConstantLayer, ConstantTensorLayer
 
 # ------------------------- Typing imports ------------------------- #
 
@@ -188,6 +188,213 @@ class PotentialResMLP(MLP):
         output_combined = (output_phi + output_gamma) @ (output_phi + output_gamma)
         regularisation = self.alpha * (x @ x)
         return 0.5 * output_combined + regularisation
+
+
+class PotentialMLP_scale(MLP):
+    """Potential network based on a multi-layer perceptron, with an output scale."""
+
+    alpha: float
+    dim: int
+    param_dim: int
+    scale: float
+
+    def __init__(
+        self,
+        key: PRNGKey,
+        dim: int,
+        units: list[int],
+        activation: str,
+        alpha: float,
+        param_dim: int = 0,
+        scale: float = 1.0,
+    ) -> None:
+        r"""Potential network based on a multi-layer perceptron, with an output scale.
+
+        This is `PotentialMLP` with an additional scale on the network output,
+        $$
+            V(x, args) = \alpha \|(x, args)\|^2
+            + \lambda \, \text{MLP}(x, args)
+        $$
+        where $x$ is the input and $args$ are additional parameters.
+        The constant $\alpha \geq 0$ is a regularisation term,
+        which gives a quadratic growth to ensure that the potential is integrable.
+        We are tacitly assuming that MLP is of sub-quadratic growth,
+        so only choose activation functions that have this property
+        (most activation functions are either bounded or of linear growth).
+
+        The scale $\lambda > 0$ is useful when the potential to be learned
+        is expected to vary over a range much larger (or smaller) than the
+        natural output range of the network, since it removes the need for the
+        network weights themselves to become very large or very small.
+
+        Args:
+            key (PRNGKey): random key
+            dim (int): dimension of the input
+            units (list[int]): layer sizes
+            activation (str): activation function (can be any in `jax.nn` or custom ones defined in `onsagernet._activations`)
+            alpha (float): regulariser
+            param_dim (int, optional): dimensions of the parameters. Defaults to 0.
+            scale (float, optional): scale $\lambda$ applied to the network output. Defaults to 1.0.
+        """
+        self.dim = dim
+        units = units + [1]
+        self.param_dim = param_dim
+        super().__init__(key, dim + param_dim, units, activation)
+        self.alpha = alpha
+        self.scale = scale
+
+    def __call__(self, x: ArrayLike, args: ArrayLike) -> Array:
+        if self.param_dim > 0:
+            x = jnp.concatenate([x, args[1:]], axis=0)
+        output = super().__call__(x) * self.scale + self.alpha * (x @ x)
+        return jnp.squeeze(output)
+
+
+class PotentialResMLP_scale(MLP):
+    """Potential network with a residual connection and an output scale."""
+
+    alpha: float
+    scale: float
+    gamma_layer: eqx.nn.Linear
+    dim: int
+    param_dim: int
+
+    def __init__(
+        self,
+        key: PRNGKey,
+        dim: int,
+        units: list[int],
+        activation: str,
+        n_pot: int,
+        alpha: float,
+        scale: float,
+        param_dim: int = 0,
+    ) -> None:
+        r"""Potential network with a residual connection and an output scale.
+
+        This is `PotentialResMLP` with an additional scale on the quadratic term,
+        $$
+            V(x, args) = \alpha \|(x, args)\|^2
+            + \frac{\lambda}{2}
+            \| \phi(x, args) + \Gamma (x, args) \|^2
+        $$
+        where
+
+        - $\phi$ is a MLP of dim + param_dim -> n_pot
+        - $\Gamma$ is a matrix of size [n_pot, dim + param_dim]
+        - $\alpha > 0$ is a scalar regulariser
+        - $\lambda > 0$ is the output scale
+
+        See `PotentialMLP_scale` for why the scale is useful.
+
+        Args:
+            key (PRNGKey): random key
+            dim (int): dimension of the input
+            units (list[int]): layer sizes
+            activation (str): activation function (can be any in `jax.nn` or custom ones defined in `onsagernet._activations`)
+            n_pot (int): size of the MLP part of the potential
+            alpha (float): regulariser
+            scale (float): scale $\lambda$ applied to the quadratic term
+            param_dim (int, optional): dimension of the parameters. Defaults to 0.
+        """
+        self.dim = dim
+        self.param_dim = param_dim
+        units = units + [n_pot]
+        mlp_key, gamma_key = jax.random.split(key)
+        super().__init__(mlp_key, dim + param_dim, units, activation)
+        self.alpha = alpha
+        self.scale = scale
+        self.gamma_layer = eqx.nn.Linear(
+            dim + param_dim, n_pot, key=gamma_key, use_bias=False
+        )
+
+    def __call__(self, x: ArrayLike, args: ArrayLike) -> Array:
+        if self.param_dim > 0:
+            x = jnp.concatenate([x, args[1:]], axis=0)
+        output_phi = super().__call__(x)
+        output_gamma = self.gamma_layer(x)
+        output_combined = (
+            (output_phi + output_gamma) @ (output_phi + output_gamma) * self.scale
+        )
+        regularisation = self.alpha * (x @ x)
+        return 0.5 * output_combined + regularisation
+
+
+class PotentialResMLP_scaleV2(MLP):
+    """Potential network with a residual connection and a scale-invariant parameterisation."""
+
+    alpha: float
+    scale: float
+    gamma_layer: eqx.nn.Linear
+    dim: int
+    param_dim: int
+
+    def __init__(
+        self,
+        key: PRNGKey,
+        dim: int,
+        units: list[int],
+        activation: str,
+        n_pot: int,
+        alpha: float,
+        scale: float,
+        param_dim: int = 0,
+    ) -> None:
+        r"""Potential network with a residual connection and a scale-invariant parameterisation.
+
+        This is a variant of `PotentialResMLP_scale` in which the scale is also
+        divided out of the MLP branch,
+        $$
+            V(x, args) = \alpha \|(x, args)\|^2
+            + \lambda
+            \left\|
+                \frac{\phi(x, args)}{\lambda} + \Gamma (x, args)
+            \right\|^2
+        $$
+        where
+
+        - $\phi$ is a MLP of dim + param_dim -> n_pot
+        - $\Gamma$ is a matrix of size [n_pot, dim + param_dim]
+        - $\alpha > 0$ is a scalar regulariser
+        - $\lambda > 0$ is the output scale
+
+        Compared with `PotentialResMLP_scale`, this keeps the contribution of the
+        linear branch $\Gamma$ at the scale $\lambda$ while the MLP branch
+        enters at order $1 / \lambda$, so that for large $\lambda$ the potential
+        degenerates gracefully towards its quadratic part instead of being
+        dominated by the network output.
+
+        Args:
+            key (PRNGKey): random key
+            dim (int): dimension of the input
+            units (list[int]): layer sizes
+            activation (str): activation function (can be any in `jax.nn` or custom ones defined in `onsagernet._activations`)
+            n_pot (int): size of the MLP part of the potential
+            alpha (float): regulariser
+            scale (float): scale $\lambda$
+            param_dim (int, optional): dimension of the parameters. Defaults to 0.
+        """
+        self.dim = dim
+        self.param_dim = param_dim
+        units = units + [n_pot]
+        mlp_key, gamma_key = jax.random.split(key)
+        super().__init__(mlp_key, dim + param_dim, units, activation)
+        self.alpha = alpha
+        self.scale = scale
+        self.gamma_layer = eqx.nn.Linear(
+            dim + param_dim, n_pot, key=gamma_key, use_bias=False
+        )
+
+    def __call__(self, x: ArrayLike, args: ArrayLike) -> Array:
+        if self.param_dim > 0:
+            x = jnp.concatenate([x, args[1:]], axis=0)
+        output_phi = super().__call__(x) / self.scale
+        output_gamma = self.gamma_layer(x)
+        output_combined = (
+            (output_phi + output_gamma) @ (output_phi + output_gamma) * self.scale
+        )
+        regularisation = self.alpha * (x @ x)
+        return output_combined + regularisation
 
 
 # ------------------------------------------------------------------ #
@@ -382,7 +589,7 @@ class DiffusionDiagonalMLP(MLP):
         super().__init__(key, dim + param_dim, units, activation)
         self.alpha = alpha
 
-    def __call__(self, x: ArrayLike, args: ArrayLike) -> Array:
+    def __call__(self, x: ArrayLike, args: ArrayLike = None) -> Array:
         if self.param_dim > 0:
             x = jnp.concatenate([x, args[1:]], axis=0)
         sigma_diag = super().__call__(x)
@@ -417,10 +624,124 @@ class DiffusionDiagonalConstant(eqx.Module):
         self.alpha = alpha
         self.constant_layer = ConstantLayer(dim, key)
 
-    def __call__(self, x: ArrayLike, args: ArrayLike) -> Array:
+    def __call__(self, x: ArrayLike = None, args: ArrayLike = None) -> Array:
         sigma_diag = self.constant_layer()
         sigma_squared_regularised = jnp.sqrt(self.alpha + sigma_diag**2)
         return jnp.diag(sigma_squared_regularised)
+
+
+class DiffusionConstant(eqx.Module):
+    """Constant lower-triangular diffusion matrix based on constant layers."""
+
+    alpha: float
+    diag_constant_layer: ConstantLayer
+    tril_constant_layer: ConstantTensorLayer
+    dim: int
+
+    def __init__(self, key: PRNGKey, dim: int, alpha: float) -> None:
+        r"""Constant lower-triangular diffusion matrix based on constant layers.
+
+        Unlike `DiffusionDiagonalConstant`, the matrix is not restricted to be
+        diagonal, so that the induced dissipation $M = \sigma \sigma^\top / 2$
+        can have off-diagonal entries. The matrix is parameterised as a Cholesky
+        factor
+        $$
+            \sigma = \text{diag}(h(c)) + \eta \, \text{tril}(L, -1),
+            \qquad
+            h(s) = \frac{\sqrt{1 + s^2} + s}{2},
+        $$
+        where $c$ is a trainable vector of size `dim`, $L$ is a trainable
+        `dim` by `dim` matrix of which only the strictly lower triangular part
+        is used, and $\eta = 0.1$ scales down the off-diagonal part.
+        The smooth map $h$ is positive for all $s$, which keeps $\sigma$ a valid
+        Cholesky factor and hence $\sigma \sigma^\top$ positive definite.
+
+        Note that by constant we mean that $\sigma$ does not depend on the input
+        $x$ or the parameters $args$, but it can be trained.
+
+        Args:
+            key (PRNGKey): random key
+            dim (int): dimension of the input
+            alpha (float): regulariser. Currently unused, retained for signature
+                compatibility with the other diffusion modules.
+        """
+        self.dim = dim
+        self.alpha = alpha
+        self.diag_constant_layer = ConstantLayer(dim, key)
+        self.tril_constant_layer = ConstantTensorLayer((dim, dim), key)
+
+    def __call__(self, x: ArrayLike = None, args: ArrayLike = None) -> Array:
+        sigma_diag = self.diag_constant_layer()
+        sigma_squared_regularised = (jnp.sqrt(1 + sigma_diag**2) + sigma_diag) / 2
+        sigma_tril = self.tril_constant_layer() * 0.1
+        return jnp.diag(sigma_squared_regularised) + jnp.tril(sigma_tril, k=-1)
+
+
+class DiffusionCholeskyMLP(eqx.Module):
+    """Lower-triangular diffusion matrix network based on multi-layer perceptrons."""
+
+    alpha: float
+    dim: int
+    param_dim: int
+    diagnet: MLP
+    trilnet: MLP
+
+    def __init__(
+        self,
+        key: PRNGKey,
+        dim: int,
+        units: list[int],
+        activation: str,
+        alpha: float,
+        param_dim: int = 0,
+    ) -> None:
+        r"""Lower-triangular diffusion matrix network based on multi-layer perceptrons.
+
+        This is the state-dependent counterpart of `DiffusionConstant`. The
+        matrix is parameterised as a Cholesky factor
+        $$
+            \sigma(x, args) =
+            \text{diag}\big( h(\phi_d(x, args)) \big)
+            + \eta \, \text{tril}\big( \phi_t(x, args), -1 \big),
+            \qquad
+            h(s) = \frac{\sqrt{1 + s^2} + s}{2},
+        $$
+        where
+
+        - $\phi_d$ is a MLP of dim + param_dim -> dim giving the diagonal
+        - $\phi_t$ is a MLP of dim + param_dim -> dim * dim, reshaped to a
+          `dim` by `dim` matrix of which only the strictly lower triangular
+          part is used
+        - $\eta = 0.1$ scales down the off-diagonal part
+
+        The smooth map $h$ is positive for all $s$, which keeps $\sigma$ a valid
+        Cholesky factor and hence $\sigma \sigma^\top$ positive definite.
+
+        Args:
+            key (PRNGKey): random key
+            dim (int): dimension of the input
+            units (list[int]): layer sizes
+            activation (str): activation function (can be any in `jax.nn` or custom ones defined in `onsagernet._activations`)
+            alpha (float): regulariser. Currently unused, retained for signature
+                compatibility with the other diffusion modules.
+            param_dim (int, optional): dimension of the parameters. Defaults to 0.
+        """
+        self.dim = dim
+        self.param_dim = param_dim
+        d_key, t_key = jax.random.split(key, 2)
+        self.diagnet = MLP(d_key, dim + param_dim, units + [dim], activation)
+        self.trilnet = MLP(t_key, dim + param_dim, units + [dim**2], activation)
+        self.alpha = alpha
+
+    def __call__(self, x: ArrayLike, args: ArrayLike = None) -> Array:
+        if self.param_dim > 0:
+            x = jnp.concatenate([x, args[1:]], axis=0)
+        sigma_diag = self.diagnet(x)
+        sigma_diag_regularised = (jnp.sqrt(1 + sigma_diag**2) + sigma_diag) / 2
+        return (
+            jnp.diag(sigma_diag_regularised)
+            + jnp.tril(self.trilnet(x).reshape([self.dim, self.dim]), k=-1) * 0.1
+        )
 
 
 # ------------------------------------------------------------------ #
